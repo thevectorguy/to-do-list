@@ -1,0 +1,56 @@
+services:
+  # Backend Service
+  - type: web
+    name: smart-todo-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /api/health/
+    envVars:
+      # Keep existing Supabase database configuration (set these in Render dashboard)
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      # Keep existing OpenAI configuration (set this in Render dashboard)
+      - key: OPENAI_API_KEY
+        sync: false
+      # Django configuration
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: "True"
+      - key: DJANGO_SETTINGS_MODULE
+        value: "smart_todo.settings"
+
+  # Frontend Service
+  - type: web
+    name: smart-todo-frontend
+    env: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: starter
+    envVars:
+      - key: NEXT_PUBLIC_BACKEND_URL
+        fromService:
+          type: web
+          name: smart-todo-backend
+          property: host
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: smart-todo-backend
+          property: host
+      - key: NODE_ENV
+        value: "production"

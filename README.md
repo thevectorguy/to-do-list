@@ -50,95 +50,118 @@ A full-stack web application that combines intelligent task management with AI-p
 - **Context Processing** - Daily context analysis
 - **Smart Suggestions** - AI-powered task enhancement
 
-## 📦 Installation
+## 🏗️ Project Structure
+
+```
+comata9462-project/
+├── backend/                 # Django REST API
+│   ├── ai_module/          # AI processing module
+│   ├── tasks/              # Task management app
+│   ├── smart_todo/         # Django project settings
+│   ├── requirements.txt    # Python dependencies
+│   └── manage.py          # Django management script
+├── frontend/               # Next.js React application
+│   ├── components/         # Reusable React components
+│   ├── pages/             # Next.js pages and API routes
+│   ├── lib/               # Utility functions and API client
+│   ├── styles/            # CSS and styling
+│   └── package.json       # Node.js dependencies
+├── quick-start.sh         # Automated setup script
+├── cleanup-production.sh  # Production cleanup script
+└── README.md             # This file
+```
+
+## 📦 Installation & Setup
 
 ### Prerequisites
 - Python 3.9+
 - Node.js 18+
-- PostgreSQL database (Supabase recommended)
-- OpenAI API key OR LM Studio setup
+- PostgreSQL database (Supabase configured)
+- OpenAI API key (already configured)
 
-### Backend Setup
+### Quick Start (OpenHands Environment)
 
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd smart-todo-app/backend
-   ```
+The project is production-ready and pre-configured for the OpenHands runtime environment.
 
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+#### **One-Command Setup**
+```bash
+# Run the automated setup script
+./quick-start.sh
+```
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+#### **Manual Setup (if needed)**
 
-4. **Environment configuration**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit `.env` with your configuration:
-   ```env
-   # Django Configuration
-   SECRET_KEY=your-secret-key-here
-   DEBUG=True
-   
-   # Database Configuration (Supabase)
-   DB_NAME=your_supabase_db_name
-   DB_USER=postgres
-   DB_PASSWORD=your_supabase_password
-   DB_HOST=your_supabase_host
-   DB_PORT=5432
-   
-   # AI Configuration
-   OPENAI_API_KEY=your_openai_api_key_here
-   # OR
-   LOCAL_LLM_URL=http://127.0.0.1:1234/v1/chat/completions
-   ```
+1. **Backend Setup**
+```bash
+cd backend
+python -m pip install -r requirements.txt
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver 0.0.0.0:12000 > backend.log 2>&1 &
+```
 
-5. **Database setup**
-   ```bash
-   python manage.py makemigrations
-   python manage.py migrate
-   python manage.py createsuperuser
-   ```
+2. **Frontend Setup**
+```bash
+cd frontend
+npm install
+echo "NEXT_PUBLIC_BACKEND_URL=https://work-1-zxnbvxythqwtjtxu.prod-runtime.all-hands.dev" > .env.local
+echo "NEXT_PUBLIC_API_URL=https://work-1-zxnbvxythqwtjtxu.prod-runtime.all-hands.dev/api" >> .env.local
+npm run dev -- --port 12001 --hostname 0.0.0.0 > frontend.log 2>&1 &
+```
 
-6. **Run the server**
-   ```bash
-   python manage.py runserver
-   ```
+#### **Access Points**
+- **Frontend**: https://work-2-zxnbvxythqwtjtxu.prod-runtime.all-hands.dev
+- **Backend API**: https://work-1-zxnbvxythqwtjtxu.prod-runtime.all-hands.dev/api
 
-### Frontend Setup
+#### **Production Cleanup**
+```bash
+# Remove all unnecessary files for production
+./cleanup-production.sh
+```
 
-1. **Navigate to frontend directory**
-   ```bash
-   cd ../frontend
-   ```
+### Local Development Setup
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+For local development outside OpenHands:
 
-3. **Environment configuration**
-   ```bash
-   cp .env.local.example .env.local
-   ```
-   
-   Edit `.env.local`:
-   ```env
-   NEXT_PUBLIC_API_URL=http://localhost:8000/api
-   ```
+#### Backend Setup
+```bash
+cd backend
 
-4. **Run the development server**
-   ```bash
-   npm run dev
-   ```
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your local configuration
+
+# Setup database
+python manage.py makemigrations
+python manage.py migrate
+python manage.py createsuperuser
+
+# Run server
+python manage.py runserver
+```
+
+#### Frontend Setup
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.local.example .env.local
+# Edit .env.local:
+# NEXT_PUBLIC_API_URL=http://localhost:8000/api
+
+# Run development server
+npm run dev
+```
 
 ### AI Setup Options
 
@@ -157,23 +180,51 @@ A full-stack web application that combines intelligent task management with AI-p
 ## 🎯 Usage
 
 ### Getting Started
-1. Open http://localhost:3000 in your browser
-2. Create your first task using the "Add Task" button
-3. Add daily context (emails, messages, notes) in the Context page
-4. Use AI suggestions to enhance your tasks
+1. **Access the Application**: Open https://work-2-zxnbvxythqwtjtxu.prod-runtime.all-hands.dev in your browser
+2. **Dashboard Overview**: View your task statistics and recent tasks
+3. **Create Tasks**: Click "Add Task" to create new tasks with AI assistance
+4. **AI Enhancement**: Use "Get AI Suggestions" for smart task creation
 
-### AI Features
-- **Smart Task Creation**: Click "Get AI Suggestions" when creating tasks
-- **Context Analysis**: Add daily context and click "Analyze Context"
-- **Task Enhancement**: Use "Enhance with AI" on existing tasks
-- **Priority Intelligence**: AI automatically suggests priority levels
-- **Deadline Suggestions**: Get realistic deadline recommendations
+### ✅ **Verified Working Features**
 
-### Dashboard Features
-- **Task Filtering**: Filter by status, priority, category
-- **Search**: Full-text search across all tasks
-- **Statistics**: View completion rates and task analytics
-- **Quick Actions**: Mark tasks complete, edit, or delete
+#### **Task Management**
+- ✅ **Create Tasks**: Add new tasks with title, description, priority, and deadlines
+- ✅ **AI Suggestions**: Get intelligent suggestions for priority, category, tags, and descriptions
+- ✅ **Task Status**: Track tasks as "To Do", "In Progress", or "Done"
+- ✅ **Priority Levels**: Set priority from 0-100 with visual indicators
+- ✅ **Categories**: Organize tasks by Work, Personal, etc.
+- ✅ **Tags**: Add multiple tags for better organization
+
+#### **AI Features** 
+- ✅ **Smart Suggestions**: AI analyzes task titles and provides relevant suggestions
+- ✅ **Enhanced Descriptions**: AI generates detailed, context-aware task descriptions
+- ✅ **Priority Intelligence**: AI suggests appropriate priority levels (0-100)
+- ✅ **Category Detection**: AI recommends suitable categories
+- ✅ **Tag Generation**: AI suggests relevant tags for better organization
+
+#### **Dashboard Features**
+- ✅ **Task Statistics**: View total, completed, pending, and overdue tasks
+- ✅ **Recent Tasks**: See your latest tasks with full details
+- ✅ **Real-time Updates**: Dashboard updates immediately after task creation
+- ✅ **Navigation**: Easy access to all features via sidebar menu
+- ✅ **Responsive Design**: Works on desktop and mobile devices
+
+#### **Technical Features**
+- ✅ **API Integration**: Full REST API with Django backend
+- ✅ **Database**: PostgreSQL with Supabase hosting
+- ✅ **AI Integration**: OpenAI GPT integration for smart suggestions
+- ✅ **CORS Support**: Proper cross-origin request handling
+- ✅ **Error Handling**: Graceful error handling and user feedback
+
+### **How to Use AI Features**
+1. **Create a Task**: Click "Add Task" and enter a task title
+2. **Get AI Suggestions**: Click "Get AI Suggestions" button
+3. **Apply Suggestions**: Use "Apply" buttons to accept AI recommendations for:
+   - Priority level (0-100 scale)
+   - Category (Work, Personal, etc.)
+   - Tags (relevant keywords)
+   - Enhanced description (detailed task breakdown)
+4. **Save Task**: Click "Create Task" to save with AI enhancements
 
 ## 📊 API Documentation
 
@@ -256,16 +307,98 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api
 
 ## 🚀 Deployment
 
-### Backend Deployment (Railway/Heroku)
+### Current Deployment Status
+- ✅ **Backend**: Running on OpenHands runtime (port 12000)
+- ✅ **Frontend**: Running on OpenHands runtime (port 12001)
+- ✅ **Database**: PostgreSQL hosted on Supabase
+- ✅ **AI Service**: OpenAI API integration active
+
+### Production Deployment
+
+#### Backend Deployment (Railway/Heroku/Render)
 1. Set environment variables in your hosting platform
-2. Configure PostgreSQL database
+2. Configure PostgreSQL database connection
 3. Run migrations: `python manage.py migrate`
 4. Collect static files: `python manage.py collectstatic`
+5. Configure CORS for your frontend domain
 
-### Frontend Deployment (Vercel/Netlify)
+#### Frontend Deployment (Vercel/Netlify)
 1. Set `NEXT_PUBLIC_API_URL` to your backend URL
 2. Build: `npm run build`
 3. Deploy build files
+4. Configure environment variables
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Backend Not Starting
+```bash
+# Check if port is in use
+lsof -i :12000
+
+# Check backend logs
+tail -f /workspace/comata9462-project/backend/backend.log
+
+# Restart backend
+cd /workspace/comata9462-project/backend
+python manage.py runserver 0.0.0.0:12000
+```
+
+#### Frontend Not Loading
+```bash
+# Check frontend logs
+tail -f /workspace/comata9462-project/frontend/frontend.log
+
+# Verify environment configuration
+cat /workspace/comata9462-project/frontend/.env.local
+
+# Restart frontend
+cd /workspace/comata9462-project/frontend
+npm run dev -- --port 12001 --hostname 0.0.0.0
+```
+
+#### API Connection Issues
+```bash
+# Test backend API
+curl -s https://work-1-zxnbvxythqwtjtxu.prod-runtime.all-hands.dev/api/
+
+# Check CORS configuration
+grep -r "CORS" /workspace/comata9462-project/backend/
+```
+
+#### Database Connection Issues
+```bash
+# Test database connection
+cd /workspace/comata9462-project/backend
+python manage.py dbshell
+
+# Check migrations
+python manage.py showmigrations
+```
+
+### Environment Variables
+Ensure these are properly configured:
+
+#### Backend (.env)
+```env
+DEBUG=True
+SECRET_KEY=django-insecure-1234567890
+ALLOWED_HOSTS=*
+CORS_ALLOW_ALL_ORIGINS=True
+DB_NAME=postgres
+DB_USER=postgres.richcxbjrggbdsbeylzx
+DB_PASSWORD=thevectorguy123@
+DB_HOST=aws-0-ap-south-1.pooler.supabase.com
+DB_PORT=6543
+OPENAI_API_KEY=sk-proj-...
+```
+
+#### Frontend (.env.local)
+```env
+NEXT_PUBLIC_BACKEND_URL=https://work-1-zxnbvxythqwtjtxu.prod-runtime.all-hands.dev
+NEXT_PUBLIC_API_URL=https://work-1-zxnbvxythqwtjtxu.prod-runtime.all-hands.dev/api
+```
 
 ## 🤝 Contributing
 

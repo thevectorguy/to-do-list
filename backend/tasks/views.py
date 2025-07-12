@@ -3,10 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
-from .models import Task, Category, ContextEntry
+from .models import Task, Category, ContextEntry, Subtask
 from .serializers import (
     TaskSerializer, TaskCreateSerializer, CategorySerializer, 
-    ContextEntrySerializer, AITaskSuggestionSerializer
+    ContextEntrySerializer, AITaskSuggestionSerializer, SubtaskSerializer
 )
 
 
@@ -46,6 +46,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get task statistics"""
+        from django.utils import timezone
         total_tasks = self.queryset.count()
         completed_tasks = self.queryset.filter(status='done').count()
         pending_tasks = self.queryset.filter(status__in=['todo', 'in_progress']).count()
@@ -100,3 +101,22 @@ class ContextEntryViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SubtaskViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing subtasks"""
+    queryset = Subtask.objects.all()
+    serializer_class = SubtaskSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['task', 'completed']
+    ordering_fields = ['order', 'created_at']
+    ordering = ['order', 'created_at']
+
+    @action(detail=True, methods=['patch'])
+    def toggle_completed(self, request, pk=None):
+        """Toggle subtask completion status"""
+        subtask = self.get_object()
+        subtask.completed = not subtask.completed
+        subtask.save()
+        serializer = self.get_serializer(subtask)
+        return Response(serializer.data)

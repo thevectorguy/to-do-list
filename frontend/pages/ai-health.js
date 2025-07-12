@@ -9,7 +9,7 @@ import ErrorMessage from '../components/ErrorMessage';
 export default function AIHealthPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  const { data: healthData, error, mutate, isLoading } = useSWR('/ai/health/', {
+  const { data: healthData, error, mutate, isLoading } = useSWR('/api/ai/health/', {
     refreshInterval: 30000, // Refresh every 30 seconds
   });
 

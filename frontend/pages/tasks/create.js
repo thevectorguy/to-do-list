@@ -11,7 +11,8 @@ export default function CreateTask() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Fetch categories for the form
-  const { data: categories } = useSWR('/categories/');
+  const { data: categoriesData } = useSWR('/api/categories/');
+  const categories = categoriesData?.results || [];
 
   const handleSubmit = async (taskData) => {
     setIsSubmitting(true);
@@ -43,7 +44,7 @@ export default function CreateTask() {
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <TaskForm
-            categories={categories || []}
+            categories={categories}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
             isSubmitting={isSubmitting}

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Task, Category, ContextEntry
+from .models import Task, Category, ContextEntry, Subtask
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -12,6 +12,10 @@ class CategorySerializer(serializers.ModelSerializer):
     def get_task_count(self, obj):
         return obj.tasks.count()
 
+class SubtaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subtask
+        fields = ['id', 'title', 'completed', 'order', 'created_at', 'updated_at']
 
 class TaskSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)

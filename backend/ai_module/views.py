@@ -46,7 +46,7 @@ def get_ai_suggestions(request):
             for entry in recent_contexts
         ]
         
-        # Analyze context
+        # Analyze context (this should always work with fallback)
         context_analysis = ai_processor.analyze_context(context_entries)
         
         # Get existing categories if requested
@@ -75,23 +75,60 @@ def get_ai_suggestions(request):
             enhanced_description = ai_processor.enhance_task_description(task_data, context_analysis)
             suggestions['enhanced_description'] = enhanced_description
         
+        # Determine if we used AI or fallback
+        ai_status = 'fallback' if ai_processor.rate_limited else 'success'
+        message = 'Smart fallback suggestions generated' if ai_processor.rate_limited else 'AI suggestions generated successfully'
+        
         return Response({
             'context_analysis': context_analysis,
             'suggestions': suggestions,
             'existing_categories': existing_categories,
-            'context_entries_used': len(context_entries)
+            'context_entries_used': len(context_entries),
+            'ai_status': ai_status,
+            'message': message
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
+        error_msg = str(e)
+        
+        # Provide user-friendly error messages
+        if "rate limit" in error_msg.lower() or "429" in error_msg:
+            user_error = "AI service is temporarily busy. Using smart fallback suggestions."
+            status_code = status.HTTP_200_OK  # Still return suggestions, just not AI-powered
+        elif "timeout" in error_msg.lower():
+            user_error = "AI service timeout. Using smart fallback suggestions."
+            status_code = status.HTTP_200_OK
+        else:
+            user_error = "AI service unavailable. Using smart fallback suggestions."
+            status_code = status.HTTP_200_OK
+        
+        # Ensure we have basic variables even if the try block failed early
+        if 'context_analysis' not in locals():
+            context_analysis = {'summary': 'No context available', 'key_themes': [], 'urgency_indicators': [], 'time_constraints': [], 'mood_tone': 'neutral'}
+        if 'existing_categories' not in locals():
+            existing_categories = list(Category.objects.values_list('name', flat=True)) if include_categories else []
+        if 'context_entries' not in locals():
+            context_entries = []
+        
+        # Generate smart fallback suggestions
+        fallback_suggestions = {}
+        if task_data:
+            # Use the AI processor's fallback methods
+            fallback_suggestions['priority'] = ai_processor.suggest_task_priority(task_data, context_analysis)
+            category_tags = ai_processor.suggest_categories_and_tags(task_data, existing_categories)
+            fallback_suggestions['category'] = category_tags['category']
+            fallback_suggestions['tags'] = category_tags['tags']
+            fallback_suggestions['enhanced_description'] = ai_processor.enhance_task_description(task_data, context_analysis)
+            fallback_suggestions['deadline'] = None  # No smart deadline fallback
+        
         return Response({
-            'error': f'AI processing failed: {str(e)}',
-            'fallback_suggestions': {
-                'priority': task_data.get('priority', 50),
-                'category': 'General',
-                'tags': ['task'],
-                'enhanced_description': task_data.get('description', '')
-            }
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            'context_analysis': context_analysis,
+            'suggestions': fallback_suggestions,
+            'existing_categories': existing_categories,
+            'context_entries_used': len(context_entries),
+            'ai_status': 'fallback',
+            'message': user_error
+        }, status=status_code)
 
 
 @api_view(['POST'])
@@ -193,24 +230,72 @@ def enhance_existing_task(request, task_id):
 
 @api_view(['GET'])
 def ai_health_check(request):
-    """Check AI service health and configuration"""
+    """Check AI service health and configuration by actually testing connectivity"""
+    import requests
+    
     health_status = {
-        'openai_configured': bool(ai_processor.openai_api_key),
-        'local_llm_configured': bool(ai_processor.local_llm_url),
+        'openai_api_key_present': bool(ai_processor.openai_api_key),
         'status': 'healthy'
     }
     
-    # Test AI connection
+    # Test OpenAI connection
+    openai_working = False
+    openai_error = None
     try:
-        test_messages = [
-            {'role': 'user', 'content': 'Hello, this is a test. Please respond with "OK".'}
-        ]
-        response = ai_processor._make_ai_request(test_messages)
-        health_status['ai_responsive'] = True
-        health_status['test_response'] = response[:100]  # First 100 chars
+        if ai_processor.openai_client and ai_processor.openai_api_key:
+            test_messages = [
+                {'role': 'user', 'content': 'Hello, this is a test. Please respond with "OK".'}
+            ]
+            response = ai_processor._call_openai(test_messages)
+            openai_working = True
+            health_status['openai_test_response'] = response[:100]  # First 100 chars
+        else:
+            if not ai_processor.openai_api_key:
+                openai_error = "OpenAI API key not configured"
+            else:
+                openai_error = "OpenAI client failed to initialize"
     except Exception as e:
-        health_status['ai_responsive'] = False
-        health_status['error'] = str(e)
+        openai_error = f"OpenAI connection failed: {str(e)}"
+    
+    health_status['openai_configured'] = openai_working
+    if openai_error:
+        health_status['openai_error'] = openai_error
+    
+    # Test Local LLM connection (only if URL is configured and not default)
+    local_llm_working = False
+    local_llm_error = None
+    if (ai_processor.local_llm_url and 
+        ai_processor.local_llm_url.strip() and 
+        ai_processor.local_llm_url != 'http://127.0.0.1:1234/v1/chat/completions'):  # Skip default placeholder
+        try:
+            # Test if the local LLM endpoint is reachable
+            test_url = ai_processor.local_llm_url.replace('/v1/chat/completions', '/v1/models')
+            response = requests.get(test_url, timeout=3)
+            if response.status_code == 200:
+                local_llm_working = True
+            else:
+                local_llm_error = f"Local LLM returned status {response.status_code}"
+        except requests.exceptions.ConnectionError:
+            local_llm_error = "Local LLM endpoint not reachable"
+        except requests.exceptions.Timeout:
+            local_llm_error = "Local LLM endpoint timeout"
+        except Exception as e:
+            local_llm_error = f"Local LLM test failed: {str(e)}"
+    else:
+        local_llm_error = "Local LLM not configured (using default placeholder)"
+    
+    health_status['local_llm_configured'] = local_llm_working
+    if local_llm_error:
+        health_status['local_llm_error'] = local_llm_error
+    
+    # Overall AI responsiveness
+    health_status['ai_responsive'] = openai_working or local_llm_working
+    
+    # Overall status
+    if not openai_working and not local_llm_working:
         health_status['status'] = 'degraded'
+        health_status['error'] = "No AI services are working"
+    elif openai_working:
+        health_status['test_response'] = health_status.get('openai_test_response', 'OK')
     
     return Response(health_status)

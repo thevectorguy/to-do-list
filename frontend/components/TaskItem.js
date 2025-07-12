@@ -11,7 +11,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { formatDate, formatRelativeTime, isOverdue, isDueSoon, getPriorityClass, getStatusColor } from '../lib/utils';
-import { taskAPI } from '../lib/api';
+import { getApiUrl } from '../lib/config-simple';
 import toast from 'react-hot-toast';
 
 const TaskItem = ({ task, onClick, onUpdate, categories }) => {
@@ -20,7 +20,14 @@ const TaskItem = ({ task, onClick, onUpdate, categories }) => {
   const handleStatusChange = async (newStatus) => {
     setIsUpdating(true);
     try {
-      await taskAPI.updateTask(task.id, { ...task, status: newStatus });
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/tasks/${task.id}/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...task, status: newStatus })
+      });
+      
+      if (!response.ok) throw new Error('Failed to update task');
       toast.success(`Task marked as ${newStatus.replace('_', ' ')}`);
       onUpdate();
     } catch (error) {

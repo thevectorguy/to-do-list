@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { MessageSquare, Mail, FileText, Users, Plus } from 'lucide-react';
-import { taskAPI } from '../lib/api';
+import { getApiUrl } from '../lib/config-simple';
 import toast from 'react-hot-toast';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -57,7 +57,15 @@ const ContextInput = ({ onSuccess, onCancel }) => {
           return;
         }
 
-        await taskAPI.createContextBulk(entries);
+        // Create bulk entries
+        const apiUrl = getApiUrl();
+        const response = await fetch(`${apiUrl}/contexts/bulk/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries })
+        });
+        
+        if (!response.ok) throw new Error('Failed to create bulk entries');
         toast.success(`Added ${entries.length} context entries`);
       } else {
         // Single entry
@@ -66,10 +74,17 @@ const ContextInput = ({ onSuccess, onCancel }) => {
           return;
         }
 
-        await taskAPI.createContext({
-          content: data.content.trim(),
-          source: data.source
+        const apiUrl = getApiUrl();
+        const response = await fetch(`${apiUrl}/contexts/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: data.content.trim(),
+            source: data.source
+          })
         });
+        
+        if (!response.ok) throw new Error('Failed to create context entry');
         toast.success('Context entry added');
       }
 

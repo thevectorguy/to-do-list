@@ -13,7 +13,8 @@ export default function ContextPage() {
   const [analysisResult, setAnalysisResult] = useState(null);
 
   // Fetch context entries
-  const { data: contexts, error, mutate, isLoading } = useSWR('/contexts/');
+  const { data: contextsData, error, mutate, isLoading } = useSWR('/api/contexts/');
+  const contexts = contextsData?.results || [];
 
   const handleContextAdded = () => {
     mutate();

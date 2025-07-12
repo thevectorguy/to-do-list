@@ -66,6 +66,24 @@ class Task(models.Model):
     def priority_label(self):
         return dict(self.PRIORITY_CHOICES).get(self.priority, 'Unknown')
 
+class Subtask(models.Model):
+    """Subtasks for breaking down main tasks"""
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='subtasks'
+    )
+    title = models.CharField(max_length=200)
+    completed = models.BooleanField(default=False)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f"{self.task.title} - {self.title}"
 
 class ContextEntry(models.Model):
     """Daily context entries for AI processing"""

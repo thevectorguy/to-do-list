@@ -61,7 +61,13 @@ const TaskForm = ({
 
       setAiSuggestions(response.data);
       setShowAISuggestions(true);
-      toast.success('AI suggestions generated!');
+      
+      // Show appropriate message based on AI status
+      if (response.data.ai_status === 'fallback') {
+        toast.warning(response.data.message || 'Using smart fallback suggestions');
+      } else {
+        toast.success(response.data.message || 'AI suggestions generated!');
+      }
     } catch (error) {
       toast.error('Failed to get AI suggestions');
       console.error('AI suggestions error:', error);
@@ -308,7 +314,7 @@ const TaskForm = ({
           </label>
           <select {...register('category')} className="select">
             <option value="">Select category...</option>
-            {categories.map((category) => (
+            {(categories || []).map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
               </option>

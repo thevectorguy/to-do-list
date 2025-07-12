@@ -44,7 +44,7 @@ export const getPriorityLabel = (priority) => {
 export const getPriorityClass = (priority) => {
   if (priority >= 75) return 'priority-high';
   if (priority >= 50) return 'priority-medium-high';
-  if (priority >= 25) return 'priority-medium';
+  if (priority >= 25) return 'priority-medium-low';
   return 'priority-low';
 };
 
@@ -97,9 +97,9 @@ export const filterTasks = (tasks, filters) => {
     // Search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      const titleMatch = task.title.toLowerCase().includes(searchLower);
-      const descriptionMatch = task.description.toLowerCase().includes(searchLower);
-      const tagsMatch = task.tags.some(tag => tag.toLowerCase().includes(searchLower));
+      const titleMatch = task.title?.toLowerCase().includes(searchLower) || false;
+      const descriptionMatch = task.description?.toLowerCase().includes(searchLower) || false;
+      const tagsMatch = Array.isArray(task.tags) && task.tags.some(tag => tag.toLowerCase().includes(searchLower));
       
       if (!titleMatch && !descriptionMatch && !tagsMatch) {
         return false;

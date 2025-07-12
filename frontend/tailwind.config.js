@@ -61,6 +61,12 @@ module.exports = {
         'fade-in': 'fadeIn 0.5s ease-in-out',
         'slide-up': 'slideUp 0.3s ease-out',
         'pulse-slow': 'pulse 3s infinite',
+        'bounce-slow': 'bounce 2s infinite',
+        'spin-slow': 'spin 3s linear infinite',
+        'float': 'float 3s ease-in-out infinite',
+        'glow': 'glow 2s ease-in-out infinite alternate',
+        'shimmer': 'shimmer 2s linear infinite',
+        'wave': 'wave 1.5s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -70,6 +76,22 @@ module.exports = {
         slideUp: {
           '0%': { transform: 'translateY(10px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        glow: {
+          '0%': { boxShadow: '0 0 5px rgba(59, 130, 246, 0.5)' },
+          '100%': { boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)' },
+        },
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+        wave: {
+          '0%, 100%': { transform: 'scaleY(1)' },
+          '50%': { transform: 'scaleY(1.5)' },
         },
       },
     },

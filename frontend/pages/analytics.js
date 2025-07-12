@@ -10,9 +10,12 @@ export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState('week');
 
   // Fetch data
-  const { data: stats, error: statsError, isLoading: statsLoading } = useSWR('/tasks/stats/');
-  const { data: tasks, error: tasksError, isLoading: tasksLoading } = useSWR('/tasks/');
-  const { data: categories, error: categoriesError } = useSWR('/categories/');
+  const { data: stats, error: statsError, isLoading: statsLoading } = useSWR('/api/tasks/stats/');
+  const { data: tasksData, error: tasksError, isLoading: tasksLoading } = useSWR('/api/tasks/');
+  const { data: categoriesData, error: categoriesError } = useSWR('/api/categories/');
+
+  const tasks = tasksData?.results || [];
+  const categories = categoriesData?.results || [];
 
   // Calculate analytics
   const analytics = tasks ? calculateAnalytics(tasks, categories || []) : null;

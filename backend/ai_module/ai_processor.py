@@ -5,7 +5,7 @@ import backoff
 from datetime import datetime, timedelta
 from django.conf import settings
 from typing import Dict, List, Optional, Any
-import openai
+from openai import OpenAI
 
 
 class AIProcessor:
@@ -14,21 +14,47 @@ class AIProcessor:
     def __init__(self):
         self.openai_api_key = getattr(settings, 'OPENAI_API_KEY', '')
         self.local_llm_url = getattr(settings, 'LOCAL_LLM_URL', '')
-        self.model = 'gpt-3.5-turbo'
-        self.openai_client = openai.OpenAI(api_key=self.openai_api_key) if self.openai_api_key else None
+        self.model = 'gpt-4o-mini'
+        self.rate_limited = True  # Temporarily disable OpenAI due to rate limits
+        
+        # Initialize OpenAI client with the new format
+        self.openai_client = None
+        if self.openai_api_key:
+            try:
+                self.openai_client = OpenAI(api_key=self.openai_api_key)
+            except Exception as e:
+                print(f"Failed to initialize OpenAI client: {e}")
+                self.openai_client = None
     
-    @backoff.on_exception(backoff.expo, Exception, max_tries=3, max_time=60)
+    @backoff.on_exception(
+        backoff.expo, 
+        Exception, 
+        max_tries=2, 
+        max_time=30,
+        giveup=lambda e: "429" in str(e) or "rate limit" in str(e).lower()
+    )
     def _call_openai(self, messages: List[Dict]) -> str:
-        """Call OpenAI API with retry logic using the new openai>=1.0.0 client"""
-        if not self.openai_api_key or not self.openai_client:
-            raise ValueError("OpenAI API key not configured")
-        response = self.openai_client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1000
-        )
-        return response.choices[0].message.content
+        """Call OpenAI API with retry logic using the new OpenAI client"""
+        if not self.openai_client:
+            raise ValueError("OpenAI client not initialized. Check API key configuration.")
+            
+        try:
+            response = self.openai_client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1000,
+                timeout=15  # 15 second timeout
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "429" in str(e) or "rate limit" in error_msg:
+                raise Exception("Rate limit exceeded. Please try again later.")
+            elif "timeout" in error_msg:
+                raise Exception("Request timeout. Please try again.")
+            else:
+                raise Exception(f"OpenAI API call failed: {str(e)}")
     
     @backoff.on_exception(backoff.expo, Exception, max_tries=3, max_time=60)
     def _call_local_llm(self, messages: List[Dict]) -> str:
@@ -55,15 +81,22 @@ class AIProcessor:
     def _make_ai_request(self, messages: List[Dict]) -> str:
         """Make AI request with fallback from OpenAI to local LLM"""
         try:
-            if self.openai_api_key:
+            # Skip OpenAI if we know we're rate limited
+            if self.openai_client and not self.rate_limited:
                 return self._call_openai(messages)
             elif self.local_llm_url:
                 return self._call_local_llm(messages)
             else:
                 raise ValueError("No AI backend configured. Please set OPENAI_API_KEY or LOCAL_LLM_URL")
         except Exception as e:
-            # Try fallback if primary method fails
-            if self.openai_api_key and self.local_llm_url:
+            error_msg = str(e).lower()
+            # Mark as rate limited and fail fast to trigger fallback
+            if "rate limit" in error_msg or "429" in str(e):
+                self.rate_limited = True
+                raise Exception("Rate limit exceeded. Please try again later.")
+            
+            # Try fallback if primary method fails for other reasons
+            if self.openai_client and self.local_llm_url:
                 try:
                     return self._call_local_llm(messages)
                 except:
@@ -72,8 +105,49 @@ class AIProcessor:
     
     def analyze_context(self, context_entries: List[Dict]) -> Dict[str, Any]:
         """Analyze daily context entries to extract insights"""
+        # Fallback analysis for when AI is unavailable
+        def fallback_analysis():
+            if not context_entries:
+                return {'summary': 'No context available', 'key_themes': [], 'urgency_indicators': [], 'time_constraints': [], 'mood_tone': 'neutral'}
+            
+            # Simple keyword-based analysis
+            all_text = " ".join([entry.get('content', '') for entry in context_entries]).lower()
+            
+            urgency_keywords = ['urgent', 'asap', 'critical', 'emergency', 'deadline', 'due']
+            theme_keywords = {
+                'work': ['work', 'project', 'meeting', 'business', 'office'],
+                'personal': ['personal', 'family', 'home', 'health'],
+                'learning': ['learn', 'study', 'course', 'training'],
+                'finance': ['money', 'pay', 'bill', 'budget', 'bank']
+            }
+            
+            urgency_indicators = [keyword for keyword in urgency_keywords if keyword in all_text]
+            key_themes = [theme for theme, keywords in theme_keywords.items() if any(keyword in all_text for keyword in keywords)]
+            
+            # Simple mood detection
+            positive_words = ['good', 'great', 'excellent', 'happy', 'success']
+            negative_words = ['bad', 'terrible', 'stressed', 'worried', 'problem']
+            
+            positive_count = sum(1 for word in positive_words if word in all_text)
+            negative_count = sum(1 for word in negative_words if word in all_text)
+            
+            if positive_count > negative_count:
+                mood = 'positive'
+            elif negative_count > positive_count:
+                mood = 'stressed'
+            else:
+                mood = 'neutral'
+            
+            return {
+                'summary': f'Analyzed {len(context_entries)} context entries with themes: {", ".join(key_themes) if key_themes else "general"}',
+                'key_themes': key_themes,
+                'urgency_indicators': urgency_indicators,
+                'time_constraints': [],
+                'mood_tone': mood
+            }
+        
         if not context_entries:
-            return {'summary': 'No context available', 'key_themes': [], 'urgency_indicators': []}
+            return fallback_analysis()
         
         context_text = "\n".join([
             f"[{entry.get('source', 'unknown')}] {entry.get('content', '')}"
@@ -111,16 +185,29 @@ class AIProcessor:
                     'mood_tone': 'neutral'
                 }
         except Exception as e:
-            return {
-                'summary': f'Error analyzing context: {str(e)}',
-                'key_themes': [],
-                'urgency_indicators': [],
-                'time_constraints': [],
-                'mood_tone': 'neutral'
-            }
+            return fallback_analysis()
     
     def suggest_task_priority(self, task_data: Dict, context_analysis: Dict) -> int:
         """Suggest task priority based on task details and context"""
+        # Fallback logic for when AI is unavailable
+        def fallback_priority():
+            title = task_data.get('title', '').lower()
+            description = task_data.get('description', '').lower()
+            current_priority = task_data.get('priority', 50)
+            
+            # Simple keyword-based priority adjustment
+            high_priority_keywords = ['urgent', 'asap', 'critical', 'important', 'deadline', 'meeting']
+            low_priority_keywords = ['later', 'someday', 'maybe', 'optional', 'nice to have']
+            
+            text = f"{title} {description}"
+            
+            if any(keyword in text for keyword in high_priority_keywords):
+                return min(100, current_priority + 25)
+            elif any(keyword in text for keyword in low_priority_keywords):
+                return max(0, current_priority - 25)
+            else:
+                return current_priority
+        
         messages = [
             {
                 'role': 'system',
@@ -155,9 +242,9 @@ class AIProcessor:
             if numbers:
                 priority = int(numbers[0])
                 return max(0, min(100, priority))  # Clamp between 0-100
-            return task_data.get('priority', 0)  # Return original if parsing fails
+            return fallback_priority()
         except Exception:
-            return task_data.get('priority', 0)
+            return fallback_priority()
     
     def suggest_deadline(self, task_data: Dict, context_analysis: Dict) -> Optional[str]:
         """Suggest realistic deadline for a task"""
@@ -205,6 +292,55 @@ class AIProcessor:
     
     def suggest_categories_and_tags(self, task_data: Dict, existing_categories: List[str]) -> Dict[str, List[str]]:
         """Suggest categories and tags for a task"""
+        # Fallback logic for when AI is unavailable
+        def fallback_categorization():
+            title = task_data.get('title', '').lower()
+            description = task_data.get('description', '').lower()
+            text = f"{title} {description}"
+            
+            # Simple keyword-based categorization
+            category_keywords = {
+                'Work': ['work', 'project', 'meeting', 'deadline', 'task', 'business'],
+                'Personal': ['personal', 'home', 'family', 'health', 'exercise'],
+                'Learning': ['learn', 'study', 'course', 'training', 'education'],
+                'Shopping': ['buy', 'purchase', 'shop', 'order', 'grocery'],
+                'Health': ['doctor', 'appointment', 'medicine', 'exercise', 'health'],
+                'Finance': ['pay', 'bill', 'money', 'budget', 'bank', 'finance']
+            }
+            
+            # Find best matching category
+            best_category = 'General'
+            max_matches = 0
+            
+            for category, keywords in category_keywords.items():
+                matches = sum(1 for keyword in keywords if keyword in text)
+                if matches > max_matches:
+                    max_matches = matches
+                    best_category = category
+            
+            # Use existing category if available
+            if existing_categories and best_category in existing_categories:
+                category = best_category
+            elif existing_categories:
+                category = existing_categories[0]  # Use first existing category
+            else:
+                category = best_category
+            
+            # Generate simple tags
+            tags = []
+            if 'meeting' in text:
+                tags.append('meeting')
+            if 'urgent' in text or 'asap' in text:
+                tags.append('urgent')
+            if 'project' in text:
+                tags.append('project')
+            if 'review' in text:
+                tags.append('review')
+            if 'plan' in text:
+                tags.append('planning')
+            
+            return {'category': category, 'tags': tags[:5]}
+        
         messages = [
             {
                 'role': 'system',
@@ -248,10 +384,32 @@ class AIProcessor:
                 
                 return {'category': category, 'tags': tags[:5]}
         except Exception:
-            return {'category': '', 'tags': []}
+            return fallback_categorization()
     
     def enhance_task_description(self, task_data: Dict, context_analysis: Dict) -> str:
         """Enhance task description with context-aware details"""
+        # Fallback logic for when AI is unavailable
+        def fallback_description():
+            title = task_data.get('title', '')
+            original_desc = task_data.get('description', '')
+            
+            if original_desc.strip():
+                return original_desc
+            
+            # Generate basic description based on title
+            title_lower = title.lower()
+            
+            if 'meeting' in title_lower:
+                return f"Organize and conduct {title}. Prepare agenda, invite participants, and ensure all necessary materials are ready."
+            elif 'plan' in title_lower:
+                return f"Create a comprehensive plan for {title.replace('Plan', '').strip()}. Define objectives, timeline, and required resources."
+            elif 'review' in title_lower:
+                return f"Conduct thorough review of {title.replace('review', '').strip()}. Analyze current status and identify areas for improvement."
+            elif 'project' in title_lower:
+                return f"Work on {title}. Break down into smaller tasks and track progress towards completion."
+            else:
+                return f"Complete {title}. Ensure all requirements are met and deliverables are ready."
+        
         messages = [
             {
                 'role': 'system',
@@ -279,7 +437,7 @@ class AIProcessor:
             response = self._make_ai_request(messages)
             return response.strip()
         except Exception:
-            return task_data.get('description', '')
+            return fallback_description()
 
 
 # Global instance

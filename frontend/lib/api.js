@@ -1,74 +1,153 @@
 import axios from 'axios';
+import { getApiConfig } from './config';
 
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+// Create axios instance with dynamic base URL
+const createAPI = () => {
+  const { apiUrl } = getApiConfig();
+  
+  return axios.create({
+    baseURL: apiUrl,
+    timeout: 30000,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+};
 
-// Request interceptor
-api.interceptors.request.use(
-  (config) => {
-    // Add any auth headers here if needed
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+// Get API instance (recreated each time to handle dynamic URLs)
+const getAPI = () => createAPI();
 
-// Response interceptor
-api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    // Handle common errors
-    if (error.response) {
-      // Server responded with error status
-      const errorMessage = error.response.data?.error || 
-                          error.response.data?.detail || 
-                          `HTTP ${error.response.status}: ${error.response.statusText}`;
-      error.message = errorMessage;
-    } else if (error.request) {
-      // Request was made but no response received
-      error.message = 'Network error - please check your connection';
+// Helper function to setup interceptors for an API instance
+const setupInterceptors = (apiInstance) => {
+  // Request interceptor
+  apiInstance.interceptors.request.use(
+    (config) => {
+      // Add any auth headers here if needed
+      return config;
+    },
+    (error) => {
+      return Promise.reject(error);
     }
-    
-    return Promise.reject(error);
-  }
-);
+  );
+
+  // Response interceptor
+  apiInstance.interceptors.response.use(
+    (response) => {
+      return response;
+    },
+    (error) => {
+      // Handle common errors
+      if (error.response) {
+        // Server responded with error status
+        const errorMessage = error.response.data?.error || 
+                            error.response.data?.detail || 
+                            `HTTP ${error.response.status}: ${error.response.statusText}`;
+        error.message = errorMessage;
+      } else if (error.request) {
+        // Request was made but no response received
+        error.message = 'Network error - please check your connection';
+      }
+      
+      return Promise.reject(error);
+    }
+  );
+  
+  return apiInstance;
+};
 
 // API methods
 export const taskAPI = {
+  // Generic method for SWR
+  get: (url) => {
+    const api = setupInterceptors(getAPI());
+    // Handle relative URLs by ensuring they start with a slash
+    const apiUrl = url.startsWith('/') ? url : `/${url}`;
+    return api.get(apiUrl);
+  },
+  
   // Tasks
-  getTasks: (params = {}) => api.get('/tasks/', { params }),
-  getTask: (id) => api.get(`/tasks/${id}/`),
-  createTask: (data) => api.post('/tasks/', data),
-  updateTask: (id, data) => api.put(`/tasks/${id}/`, data),
-  deleteTask: (id) => api.delete(`/tasks/${id}/`),
-  getOverdueTasks: () => api.get('/tasks/overdue/'),
-  getHighPriorityTasks: () => api.get('/tasks/high_priority/'),
-  getTaskStats: () => api.get('/tasks/stats/'),
+  getTasks: (params = {}) => {
+    const api = setupInterceptors(getAPI());
+    return api.get('/tasks/', { params });
+  },
+  getTask: (id) => {
+    const api = setupInterceptors(getAPI());
+    return api.get(`/tasks/${id}/`);
+  },
+  createTask: (data) => {
+    const api = setupInterceptors(getAPI());
+    return api.post('/tasks/', data);
+  },
+  updateTask: (id, data) => {
+    const api = setupInterceptors(getAPI());
+    return api.put(`/tasks/${id}/`, data);
+  },
+  deleteTask: (id) => {
+    const api = setupInterceptors(getAPI());
+    return api.delete(`/tasks/${id}/`);
+  },
+  getOverdueTasks: () => {
+    const api = setupInterceptors(getAPI());
+    return api.get('/tasks/overdue/');
+  },
+  getHighPriorityTasks: () => {
+    const api = setupInterceptors(getAPI());
+    return api.get('/tasks/high_priority/');
+  },
+  getTaskStats: () => {
+    const api = setupInterceptors(getAPI());
+    return api.get('/tasks/stats/');
+  },
   
   // Categories
-  getCategories: () => api.get('/categories/'),
-  createCategory: (data) => api.post('/categories/', data),
-  getPopularCategories: () => api.get('/categories/popular/'),
+  getCategories: () => {
+    const api = setupInterceptors(getAPI());
+    return api.get('/categories/');
+  },
+  createCategory: (data) => {
+    const api = setupInterceptors(getAPI());
+    return api.post('/categories/', data);
+  },
+  getPopularCategories: () => {
+    const api = setupInterceptors(getAPI());
+    return api.get('/categories/popular/');
+  },
   
   // Context
-  getContexts: (params = {}) => api.get('/contexts/', { params }),
-  createContext: (data) => api.post('/contexts/', data),
-  createContextBulk: (data) => api.post('/contexts/bulk_create/', data),
-  getRecentContexts: (limit = 10) => api.get(`/contexts/recent/?limit=${limit}`),
+  getContexts: (params = {}) => {
+    const api = setupInterceptors(getAPI());
+    return api.get('/contexts/', { params });
+  },
+  createContext: (data) => {
+    const api = setupInterceptors(getAPI());
+    return api.post('/contexts/', data);
+  },
+  createContextBulk: (data) => {
+    const api = setupInterceptors(getAPI());
+    return api.post('/contexts/bulk_create/', data);
+  },
+  getRecentContexts: (limit = 10) => {
+    const api = setupInterceptors(getAPI());
+    return api.get(`/contexts/recent/?limit=${limit}`);
+  },
   
   // AI Features
-  getAISuggestions: (data) => api.post('/ai/suggestions/', data),
-  analyzeContext: (data) => api.post('/ai/analyze-context/', data),
-  enhanceTask: (taskId, data = {}) => api.post(`/ai/enhance-task/${taskId}/`, data),
-  checkAIHealth: () => api.get('/ai/health/'),
+  getAISuggestions: (data) => {
+    const api = setupInterceptors(getAPI());
+    return api.post('/ai/suggestions/', data);
+  },
+  analyzeContext: (data) => {
+    const api = setupInterceptors(getAPI());
+    return api.post('/ai/analyze-context/', data);
+  },
+  enhanceTask: (taskId, data = {}) => {
+    const api = setupInterceptors(getAPI());
+    return api.post(`/ai/enhance-task/${taskId}/`, data);
+  },
+  checkAIHealth: () => {
+    const api = setupInterceptors(getAPI());
+    return api.get('/ai/health/');
+  },
 };
 
-export default api;
+export default getAPI;

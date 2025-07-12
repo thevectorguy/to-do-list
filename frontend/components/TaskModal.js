@@ -1,265 +1,361 @@
-import { useState } from 'react';
-import { X, Edit, Trash2, Brain, Sparkles } from 'lucide-react';
-import { taskAPI } from '../lib/api';
-import { formatDate, formatRelativeTime, getPriorityClass, isOverdue } from '../lib/utils';
-import TaskForm from './TaskForm';
-import toast from 'react-hot-toast';
-import LoadingSpinner from './LoadingSpinner';
+import { useState, useEffect } from 'react';
+import useSWR from 'swr';
+import { X, Save, Trash2, Calendar, Tag, AlertCircle } from 'lucide-react';
 
-const TaskModal = ({ task, categories, isOpen, onClose, onUpdate }) => {
+const TaskModal = ({ taskId, isOpen, onClose }) => {
+  const { data: task, error, isLoading, mutate } = useSWR(taskId ? `/api/tasks/${taskId}/` : null);
+  const { data: categoriesData } = useSWR('/api/categories/');
+
   const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    category: '',
+    priority: 50,
+    deadline: '',
+    status: 'todo',
+    tags: []
+  });
+  const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isEnhancing, setIsEnhancing] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
 
-  if (!isOpen || !task) return null;
+  const categories = categoriesData?.results || [];
 
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
+  useEffect(() => {
+    if (task) {
+      setFormData({
+        title: task.title || '',
+        description: task.description || '',
+        category: task.category || '',
+        priority: task.priority || 50,
+        deadline: task.deadline ? task.deadline.split('T')[0] : '',
+        status: task.status || 'todo',
+        tags: task.tags || []
+      });
+    }
+  }, [task]);
 
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-  };
+  if (!isOpen) return null;
 
-  const handleSave = async (taskData) => {
-    setIsUpdating(true);
+  const handleSave = async () => {
+    setIsSaving(true);
     try {
-      await taskAPI.updateTask(task.id, taskData);
-      toast.success('Task updated successfully!');
-      onUpdate();
-      setIsEditing(false);
+      const response = await fetch(`/api/tasks/${taskId}/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        await mutate();
+        setIsEditing(false);
+      } else {
+        throw new Error('Failed to save task');
+      }
     } catch (error) {
-      toast.error('Failed to update task');
-      console.error('Update task error:', error);
+      console.error('Error saving task:', error);
+      alert('Failed to save task');
     } finally {
-      setIsUpdating(false);
+      setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this task?')) {
-      return;
-    }
+    if (!confirm('Are you sure you want to delete this task?')) return;
 
     setIsDeleting(true);
     try {
-      await taskAPI.deleteTask(task.id);
-      toast.success('Task deleted successfully!');
-      onUpdate();
-      onClose();
+      const response = await fetch(`/api/tasks/${taskId}/`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        onClose();
+      } else {
+        throw new Error('Failed to delete task');
+      }
     } catch (error) {
-      toast.error('Failed to delete task');
-      console.error('Delete task error:', error);
+      console.error('Error deleting task:', error);
+      alert('Failed to delete task');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const handleEnhanceWithAI = async () => {
-    setIsEnhancing(true);
-    try {
-      const response = await taskAPI.enhanceTask(task.id, { apply_suggestions: true });
-      toast.success('Task enhanced with AI suggestions!');
-      onUpdate();
-    } catch (error) {
-      toast.error('Failed to enhance task with AI');
-      console.error('AI enhancement error:', error);
-    } finally {
-      setIsEnhancing(false);
-    }
-  };
-
-  const categoryName = categories.find(cat => cat.id === task.category)?.name || 'Uncategorized';
-  const overdue = isOverdue(task.deadline);
-
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        {isEditing ? (
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Edit Task</h2>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">
+            {isEditing ? 'Edit Task' : 'Task Details'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
             </div>
-            <TaskForm
-              task={task}
-              categories={categories}
-              onSubmit={handleSave}
-              onCancel={handleCancelEdit}
-              isSubmitting={isUpdating}
-              submitLabel="Update Task"
-            />
-          </div>
-        ) : (
-          <>
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center space-x-3">
-                <div className={`priority-indicator ${getPriorityClass(task.priority)}`} />
-                <h2 className="text-xl font-bold text-gray-900">{task.title}</h2>
-                {task.ai_enhanced && (
-                  <div className="flex items-center px-2 py-1 bg-primary-100 text-primary-800 text-xs rounded-full">
-                    <Brain className="h-3 w-3 mr-1" />
-                    AI Enhanced
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
+          ) : error || !task ? (
+            <div className="text-center py-8">
+              <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Task not found</h3>
+              <p className="text-gray-600">The task you're looking for doesn't exist or has been deleted.</p>
             </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              {/* Status and Priority */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <span className={`
-                    inline-block px-3 py-1 rounded-full text-sm font-medium status-${task.status}
-                  `}>
-                    {task.status.replace('_', ' ').toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                  <span className={`
-                    inline-block px-3 py-1 rounded-full text-sm font-medium
-                    ${task.priority >= 75 ? 'bg-danger-100 text-danger-800' :
-                      task.priority >= 50 ? 'bg-warning-100 text-warning-800' :
-                      task.priority >= 25 ? 'bg-primary-100 text-primary-800' :
-                      'bg-success-100 text-success-800'}
-                  `}>
-                    {task.priority}/100
-                  </span>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <span className="text-gray-900">{categoryName}</span>
-                </div>
-              </div>
-
-              {/* Description */}
-              {task.description && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-700 whitespace-pre-wrap">{task.description}</p>
+          ) : (
+            <div className="space-y-6">
+              {isEditing ? (
+                <>
+                  {/* Title */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Enter task title"
+                      required
+                    />
                   </div>
-                </div>
-              )}
 
-              {/* Original Description (if AI enhanced) */}
-              {task.ai_enhanced && task.original_description && task.original_description !== task.description && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Original Description</label>
-                  <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-gray-300">
-                    <p className="text-gray-600 text-sm whitespace-pre-wrap">{task.original_description}</p>
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Enter task description"
+                    />
                   </div>
-                </div>
-              )}
 
-              {/* Deadline */}
-              {task.deadline && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
-                  <div className={`
-                    flex items-center space-x-2
-                    ${overdue ? 'text-danger-600' : 'text-gray-700'}
-                  `}>
-                    <span>{formatDate(task.deadline)}</span>
-                    {overdue && (
-                      <span className="px-2 py-1 bg-danger-100 text-danger-800 text-xs rounded-full">
-                        Overdue
+                  {/* Category */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Category
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">Select a category</option>
+                      {categories.map(category => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Priority */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Priority: {formData.priority}
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>Low</span>
+                      <span>Medium</span>
+                      <span>High</span>
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Status
+                    </label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="todo">To Do</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="done">Done</option>
+                    </select>
+                  </div>
+
+                  {/* Deadline */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Deadline
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.deadline}
+                      onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Title */}
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900">{task.title}</h3>
+                  </div>
+
+                  {/* Description */}
+                  {task.description && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Description</h4>
+                      <p className="text-gray-600 whitespace-pre-wrap">{task.description}</p>
+                    </div>
+                  )}
+
+                  {/* Metadata */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Status</h4>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        task.status === 'done' ? 'bg-green-100 text-green-800' :
+                        task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {task.status === 'done' ? 'Done' :
+                         task.status === 'in_progress' ? 'In Progress' : 'To Do'}
                       </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Priority</h4>
+                      <span className="text-gray-600">{task.priority_label || task.priority}</span>
+                    </div>
+
+                    {task.category_name && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Category</h4>
+                        <span className="text-gray-600">{task.category_name}</span>
+                      </div>
+                    )}
+
+                    {task.deadline && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Deadline</h4>
+                        <div className="flex items-center text-gray-600">
+                          <Calendar className="h-4 w-4 mr-1" />
+                          {new Date(task.deadline).toLocaleDateString()}
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
-              )}
 
-              {/* Tags */}
-              {task.tags && task.tags.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
-                  <div className="flex flex-wrap gap-2">
-                    {task.tags.map((tag, index) => (
-                      <span
-                        key={index}
-                        className="px-2 py-1 bg-gray-100 text-gray-700 text-sm rounded-full"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
+                  {/* Tags */}
+                  {task.tags && task.tags.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Tags</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {task.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                          >
+                            <Tag className="h-3 w-3 mr-1" />
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Timestamps */}
+                  <div className="border-t pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
+                      <div>
+                        <span className="font-medium">Created:</span> {new Date(task.created_at).toLocaleString()}
+                      </div>
+                      <div>
+                        <span className="font-medium">Updated:</span> {new Date(task.updated_at).toLocaleString()}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </>
               )}
-
-              {/* Timestamps */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
-                <div>
-                  <span className="font-medium">Created:</span> {formatRelativeTime(task.created_at)}
-                </div>
-                <div>
-                  <span className="font-medium">Updated:</span> {formatRelativeTime(task.updated_at)}
-                </div>
-              </div>
             </div>
+          )}
+        </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-              <div className="flex items-center space-x-3">
-                {!task.ai_enhanced && (
-                  <button
-                    onClick={handleEnhanceWithAI}
-                    disabled={isEnhancing}
-                    className="btn-secondary btn-sm"
-                  >
-                    {isEnhancing ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-1" />
-                        Enhance with AI
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center space-x-3">
+        {/* Footer */}
+        {task && (
+          <div className="flex items-center justify-between p-6 border-t border-gray-200">
+            <div>
+              {!isEditing && (
                 <button
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="btn-danger btn-sm"
+                  className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 disabled:opacity-50"
                 >
-                  {isDeleting ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    <>
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
-                    </>
-                  )}
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {isDeleting ? 'Deleting...' : 'Delete'}
                 </button>
+              )}
+            </div>
+
+            <div className="flex space-x-2">
+              {!isEditing ? (
                 <button
-                  onClick={handleEdit}
-                  className="btn-primary btn-sm"
+                  onClick={() => setIsEditing(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
                 >
-                  <Edit className="h-4 w-4 mr-1" />
                   Edit
                 </button>
-              </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsEditing(false);
+                      // Reset form data to original task data
+                      setFormData({
+                        title: task.title || '',
+                        description: task.description || '',
+                        category: task.category || '',
+                        priority: task.priority || 50,
+                        deadline: task.deadline ? task.deadline.split('T')[0] : '',
+                        status: task.status || 'todo',
+                        tags: task.tags || []
+                      });
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </>
+              )}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
